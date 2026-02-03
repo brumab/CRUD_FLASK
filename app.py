@@ -48,13 +48,14 @@ def conn_db():
 # =========================
 # Inicialização automática
 # =========================
-def init_db():
-    conn = conn_server()
-    cur = conn.cursor()
-    cur.execute("CREATE DATABASE IF NOT EXISTS flask_crud")
-    conn.commit()
-    cur.close()
-    conn.close()
+
+# def init_db():
+#     conn = conn_server()
+#     cur = conn.cursor()
+#     cur.execute("CREATE DATABASE IF NOT EXISTS flask_crud")
+#     conn.commit()
+#     cur.close()
+#     conn.close()
 
 def init_tables():
     conn = conn_db()
@@ -94,6 +95,11 @@ def setup():
         init_db()
         init_tables()
         app.ready = True
+
+
+@app.before_first_request
+def setup():
+    init_tables()
 
 # =========================
 # Login
