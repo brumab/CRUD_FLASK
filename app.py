@@ -9,16 +9,30 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY") or "dev_secret_key_123"
 
+# # =========================
+# # Conexões MySQL
+# # =========================
+# def conn_server():
+#     return pymysql.connect(
+#         host=os.getenv("MYSQL_HOST", "localhost"),
+#         user=os.getenv("MYSQL_USER", "root"),
+#         password=os.getenv("MYSQL_PASSWORD", ""),
+#         port=int(os.getenv("MYSQL_PORT", 3306)),
+#         cursorclass=pymysql.cursors.DictCursor
+#     )
+
 # =========================
-# Conexões MySQL
+# Conexão MySQL (Aiven)
 # =========================
-def conn_server():
+def get_db_connection():
     return pymysql.connect(
-        host=os.getenv("MYSQL_HOST", "localhost"),
-        user=os.getenv("MYSQL_USER", "root"),
-        password=os.getenv("MYSQL_PASSWORD", ""),
+        host=os.getenv("MYSQL_HOST"),
+        user=os.getenv("MYSQL_USER"),
+        password=os.getenv("MYSQL_PASSWORD"),
+        database=os.getenv("MYSQL_DB"),
         port=int(os.getenv("MYSQL_PORT", 3306)),
-        cursorclass=pymysql.cursors.DictCursor
+        cursorclass=pymysql.cursors.DictCursor,
+        ssl={"ssl": {}}  # 🔒 SSL obrigatório Aiven
     )
 
 def conn_db():
