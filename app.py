@@ -4,27 +4,21 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# =========================
+# Load env
+# =========================
 load_dotenv()
 
+# =========================
+# Flask app
+# =========================
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY") or "dev_secret_key_123"
-
-# # =========================
-# # Conexões MySQL
-# # =========================
-# def conn_server():
-#     return pymysql.connect(
-#         host=os.getenv("MYSQL_HOST", "localhost"),
-#         user=os.getenv("MYSQL_USER", "root"),
-#         password=os.getenv("MYSQL_PASSWORD", ""),
-#         port=int(os.getenv("MYSQL_PORT", 3306)),
-#         cursorclass=pymysql.cursors.DictCursor
-#     )
+app.secret_key = os.getenv("SECRET_KEY", "dev_secret_key_123")
 
 # =========================
-# Conexão MySQL (Aiven)
+# MySQL Connection (Aiven)
 # =========================
-def get_db_connection():
+def conn_db():
     return pymysql.connect(
         host=os.getenv("MYSQL_HOST"),
         user=os.getenv("MYSQL_USER"),
@@ -32,31 +26,12 @@ def get_db_connection():
         database=os.getenv("MYSQL_DB"),
         port=int(os.getenv("MYSQL_PORT", 3306)),
         cursorclass=pymysql.cursors.DictCursor,
-        ssl={"ssl": {}}  # 🔒 SSL obrigatório Aiven
-    )
-
-def conn_db():
-    return pymysql.connect(
-        host=os.getenv("MYSQL_HOST", "localhost"),
-        user=os.getenv("MYSQL_USER", "root"),
-        password=os.getenv("MYSQL_PASSWORD", ""),
-        database=os.getenv("MYSQL_DB", "flask_crud"),
-        port=int(os.getenv("MYSQL_PORT", 3306)),
-        cursorclass=pymysql.cursors.DictCursor
+        ssl={"ssl": {}}  # 🔒 obrigatório no Aiven
     )
 
 # =========================
-# Inicialização automática
+# Init Tables (Flask 3 safe)
 # =========================
-
-# def init_db():
-#     conn = conn_server()
-#     cur = conn.cursor()
-#     cur.execute("CREATE DATABASE IF NOT EXISTS flask_crud")
-#     conn.commit()
-#     cur.close()
-#     conn.close()
-
 def init_tables():
     conn = conn_db()
     cur = conn.cursor()
@@ -64,8 +39,8 @@ def init_tables():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(50) UNIQUE,
-            password VARCHAR(255)
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password VARCHAR(255) NOT NULL
         )
     """)
 
@@ -78,10 +53,11 @@ def init_tables():
         )
     """)
 
-    cur.execute("SELECT * FROM users WHERE username='admin'")
+    # Create default admin
+    cur.execute("SELECT id FROM users WHERE username = 'admin'")
     if not cur.fetchone():
         cur.execute(
-            "INSERT INTO users (username, password) VALUES (%s,%s)",
+            "INSERT INTO users (username, password) VALUES (%s, %s)",
             ("admin", generate_password_hash("admin123"))
         )
 
@@ -89,28 +65,30 @@ def init_tables():
     cur.close()
     conn.close()
 
-@app.before_request
-def setup():
-    if not hasattr(app, "ready"):
-        init_db()
-        init_tables()
-        app.ready = True
-
-
-@app.before_first_request
-def setup():
+# =========================
+# Run init on import (Flask 3)
+# =========================
+try:
     init_tables()
+    print("✅ Banco inicializado com sucesso")
+except Exception as e:
+    print("❌ Erro ao inicializar banco:", e)
 
 # =========================
-# Login
+# Auth
 # =========================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         conn = conn_db()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE username=%s", (request.form["username"],))
+
+        cur.execute(
+            "SELECT * FROM users WHERE username = %s",
+            (request.form["username"],)
+        )
         user = cur.fetchone()
+
         cur.close()
         conn.close()
 
@@ -122,13 +100,14 @@ def login():
 
     return render_template("login.html")
 
+
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
 # =========================
-# STUDENTS CRUD + BUSCA
+# Students CRUD
 # =========================
 @app.route("/")
 def index():
@@ -155,14 +134,17 @@ def index():
 
     return render_template("index.html", students=students, search=search)
 
+
 @app.route("/students/add", methods=["POST"])
 def add_student():
     conn = conn_db()
     cur = conn.cursor()
+
     cur.execute(
-        "INSERT INTO students (name,email,phone) VALUES (%s,%s,%s)",
+        "INSERT INTO students (name, email, phone) VALUES (%s, %s, %s)",
         (request.form["name"], request.form["email"], request.form["phone"])
     )
+
     conn.commit()
     cur.close()
     conn.close()
@@ -170,18 +152,23 @@ def add_student():
     flash("Aluno cadastrado com sucesso!")
     return redirect(url_for("index"))
 
+
 @app.route("/students/update", methods=["POST"])
 def update_student():
     conn = conn_db()
     cur = conn.cursor()
+
     cur.execute("""
-        UPDATE students SET name=%s, email=%s, phone=%s WHERE id=%s
+        UPDATE students
+        SET name = %s, email = %s, phone = %s
+        WHERE id = %s
     """, (
         request.form["name"],
         request.form["email"],
         request.form["phone"],
         request.form["id"]
     ))
+
     conn.commit()
     cur.close()
     conn.close()
@@ -189,11 +176,14 @@ def update_student():
     flash("Aluno atualizado!")
     return redirect(url_for("index"))
 
+
 @app.route("/students/delete/<int:id>")
 def delete_student(id):
     conn = conn_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM students WHERE id=%s", (id,))
+
+    cur.execute("DELETE FROM students WHERE id = %s", (id,))
+
     conn.commit()
     cur.close()
     conn.close()
@@ -202,7 +192,7 @@ def delete_student(id):
     return redirect(url_for("index"))
 
 # =========================
-# Start
+# Local run
 # =========================
 if __name__ == "__main__":
     app.run(debug=True)
