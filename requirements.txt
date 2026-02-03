@@ -2,4 +2,5 @@ flask
 pymysql
 python-dotenv
 werkzeug
+gunicorn
 
